@@ -25,6 +25,7 @@ import java.util.Calendar;
 import java.util.Map;
 
 import android.database.Cursor;
+import android.util.Log;
 
 public class SQLDroidResultSet implements ResultSet {
   
@@ -288,7 +289,7 @@ public class SQLDroidResultSet implements ResultSet {
 
   @Override
   public int getConcurrency() throws SQLException {
-    System.err.println(" ********************* not implemented @ " + DebugPrinter.getFileName() + " line " + DebugPrinter.getLineNumber());
+    //System.err.println(" ********************* not implemented @ " + DebugPrinter.getFileName() + " line " + DebugPrinter.getLineNumber());
     return 0;
   }
 
@@ -422,22 +423,61 @@ public class SQLDroidResultSet implements ResultSet {
   public ResultSetMetaData getMetaData() throws SQLException {
     return new SQLDroidResultSetMetaData(c);
   }
+  
+  private int getType(int colIndex, Cursor curs){
+      int numberOfColumns = curs.getColumnCount();
+      //String[] colNames = new String[numberOfColumns];
+      Integer[] colTypes = new Integer[numberOfColumns];
+      for(int iCol=1; iCol<=numberOfColumns; iCol++) {
+          //colNames[iCol-1] = curs.getColumnName(iCol-1);
+          colTypes[iCol-1] = null; //curs.getType(iCol);
+      }
+      for(int iCol=1; iCol<=numberOfColumns; iCol++) {
+          //String colName = colNames[iCol-1];
+          Integer colType = colTypes[iCol-1];
+          if(colType==null) {
+              // determine column type
+              try {
+                  int temp = Integer.valueOf(curs.getString(iCol-1));
+                  colType = colTypes[iCol-1] = 1;//"integer";
+              } catch (Exception ignore) {
+                  try {
+                      double temp = Double.valueOf(curs.getString(iCol-1));
+                      colType = colTypes[iCol-1] = 2;//"real";
+                  } catch (Exception ignore1) {
+                      try {
+                          String temp = curs.getString(iCol-1);
+                          colType = colTypes[iCol-1] = 3;//"text";
+                      } catch (Exception ignore2) {
+                          try {
+                              curs.getBlob(iCol-1);
+                              colType = colTypes[iCol-1] = 0;//"blob";
+                          } catch (Exception ignore3) {
+                              colType = colTypes[iCol-1] = Types.OTHER;//"other";
+                          }
+                      }
+                  }
+              }
+          }
+      }
+      return colTypes[colIndex];
+  }
 
   @Override
   public Object getObject(int colID) throws SQLException {
     lastColumnRead = colID;
     int newIndex = ci(colID);
-    switch(c.getType(newIndex)) {
-      case Cursor.FIELD_TYPE_BLOB:
+    switch(getType(newIndex, c)/*c.getType(newIndex)*/) {
+      case 4:
         //CONVERT TO BYTE[] OBJECT
         return new SQLDroidBlob(c.getBlob(newIndex));
-      case Cursor.FIELD_TYPE_FLOAT:
+      case 2:
         return new Float(c.getFloat(newIndex));
-      case Cursor.FIELD_TYPE_INTEGER:
+      case 1:
         return new Integer(c.getInt(newIndex));
-      case Cursor.FIELD_TYPE_STRING:
+      case 3:
         return c.getString(newIndex);
-      case Cursor.FIELD_TYPE_NULL:
+      case 0:
         return null;
       default:
         return c.getString(newIndex);
